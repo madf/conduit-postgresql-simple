@@ -24,6 +24,8 @@ dependencies:
 - postgresql-libpq
 - postgresql-simple
 - conduit
+- bytestring
+- mtl
 
 ghc-options:
 - -Wall
