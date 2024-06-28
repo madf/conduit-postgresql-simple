@@ -1,0 +1,54 @@
+name:                conduit-postgresql-simple
+version:             0.1.0.0
+github:              "madf/conduit-postgresql-simple"
+license:             BSD-3-Clause
+author:              "Maksym Mamontov"
+maintainer:          "madf@madf.info"
+copyright:           "2024 Maksym Mamontov"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/madf/conduit-postgresql-simple#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- postgresql-libpq
+- postgresql-simple
+- conduit
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+default-extensions:
+  OverloadedStrings
+
+library:
+  source-dirs: src
+
+tests:
+  conduit-postgresql-simple-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - conduit-postgresql-simple
