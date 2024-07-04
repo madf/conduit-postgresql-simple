@@ -53,7 +53,7 @@ query_ :: (MonadResource m, FromRow r) => Connection -> Query -> ConduitT () r m
 query_ conn q = (traceM $ "query_ " ++ show q) >> doQuery fromRow conn q (fromQuery q)
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
-doQuery parser conn q fq = bracketP (traceM ("Bracket resource setup for " ++ show q) >> liftIO $ withConnection conn initQ)
+doQuery parser conn q fq = bracketP (liftIO $ traceM ("Bracket resource setup for " ++ show q) >> withConnection conn initQ)
                                     (\_ -> traceM "Bracket resource cleanup" >> shutdownQuery conn)
                                     (\_ -> yieldResults parser conn q)
   where
