@@ -22,6 +22,8 @@ import Control.Monad.State.Strict (runStateT)
 import Control.Monad (unless)
 import Control.Exception
 
+import Debug.Trace
+
 -- | Perform a @SELECT@ or other SQL query that is expected to return
 -- results. All results are retrieved in single-row mode and provided
 -- by conduit in constant memory.
@@ -51,7 +53,7 @@ query_ conn q = doQuery fromRow conn q (fromQuery q)
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
 doQuery parser conn q fq = bracketP (liftIO $ withConnection conn initQ)
-                                    (\_ -> shutdownQuery conn)
+                                    (\_ -> traceM "Bracket resource cleanup" >> shutdownQuery conn)
                                     (\_ -> yieldResults parser conn q)
   where
     initQ c = do
@@ -86,7 +88,7 @@ yieldResult :: (MonadResource m) => RowParser r -> Connection -> LibPQ.Result ->
 yieldResult parser conn result q = do
   ncols <- liftIO (LibPQ.nfields result)
   r <- liftIO $ onException (getRowWith parser ncols conn result)
-                            (cancelQuery conn)
+                            (traceM "onException cleanup." >> cancelQuery conn)
   yield r
   yieldResults parser conn q
 
