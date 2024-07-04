@@ -44,12 +44,13 @@ import Debug.Trace
 --   a syntax or type error,  or an incorrect table or column name.
 query :: (MonadResource m, ToRow qps, FromRow r) => Connection -> Query -> qps -> ConduitT () r m ()
 query conn q ps = do
+  traceM $ "query " ++ show q
   fq <- liftIO (formatQuery conn q ps)
   doQuery fromRow conn q fq
 
 -- | A version of 'query' that does not perform query substitution.
 query_ :: (MonadResource m, FromRow r) => Connection -> Query -> ConduitT () r m ()
-query_ conn q = doQuery fromRow conn q (fromQuery q)
+query_ conn q = (traceM $ "query_ " ++ show q) >> doQuery fromRow conn q (fromQuery q)
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
 doQuery parser conn q fq = bracketP (traceM ("Bracket resource setup for " ++ show q) >> liftIO $ withConnection conn initQ)
