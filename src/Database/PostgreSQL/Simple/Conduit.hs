@@ -56,20 +56,21 @@ query_ conn q = do
     doQuery fromRow conn q (fromQuery q)
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
-doQuery parser conn q fq = do
-    pid <- liftIO $ withConnection conn LibPQ.backendPID
-    bracketP (traceM ("Bracket resource setup for " ++ show pid) >> withConnection conn initQ)
-             (\_ -> traceM ("Bracket resource cleanup for " ++ show pid) >> cancelQuery conn)
-             (\_ -> yieldResults parser conn q)
+doQuery parser conn q fq = bracketP (withConnection conn initQ)
+                                    (\_ -> cancelQuery conn)
+                                    (\_ -> yieldResults parser conn q)
   where
     initQ c = do
+      pid <- liftIO $ withConnection conn LibPQ.backendPID
+      traceM $ "Initializing query at " ++ show pid
       LibPQ.sendQuery c fq >>= flip unless (throwConnError c)
       LibPQ.setSingleRowMode c >>= flip unless (throwConnError c)
     throwConnError c = do
+      pid <- liftIO $ withConnection conn LibPQ.backendPID
       e <- LibPQ.errorMessage c
       case e of
         Nothing -> throwM $ QueryError "No error" q
-        Just msg -> throwM $ QueryError (C8.unpack msg) q
+        Just msg -> throwM $ QueryError ("PID: (" ++ show pid ++ ") " ++ C8.unpack msg) q
 
 yieldResults :: (MonadResource m) => RowParser r -> Connection -> Query -> ConduitT () r m ()
 yieldResults parser conn q = do
@@ -135,6 +136,7 @@ shutdownQuery conn = do
 cancelQuery :: Connection -> IO ()
 cancelQuery conn = do
   pid <- withConnection conn LibPQ.backendPID
+  traceM $ "Cancelling query at " ++ show pid
   status <- withConnection conn LibPQ.status
   case status of
     LibPQ.ConnectionBad -> traceM ("Not cleaning up " ++ show pid ++ " because the connection is bad")
