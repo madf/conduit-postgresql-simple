@@ -43,18 +43,24 @@ import Debug.Trace
 --   a syntax or type error,  or an incorrect table or column name.
 query :: (MonadResource m, ToRow qps, FromRow r) => Connection -> Query -> qps -> ConduitT () r m ()
 query conn q ps = do
-  traceM $ "query " ++ show q
+  pid <- liftIO $ withConnection conn LibPQ.backendPID
+  traceM $ "query (" ++ show pid ++ ") " ++ show q
   fq <- liftIO (formatQuery conn q ps)
   doQuery fromRow conn q fq
 
 -- | A version of 'query' that does not perform query substitution.
 query_ :: (MonadResource m, FromRow r) => Connection -> Query -> ConduitT () r m ()
-query_ conn q = traceM ("query_ " ++ show q) >> doQuery fromRow conn q (fromQuery q)
+query_ conn q = do
+    pid <- liftIO $ withConnection conn LibPQ.backendPID
+    traceM ("query_ (" ++ show pid ++ ") " ++ show q)
+    doQuery fromRow conn q (fromQuery q)
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
-doQuery parser conn q fq = bracketP (traceM ("Bracket resource setup for " ++ show q) >> withConnection conn initQ)
-                                    (\_ -> traceM "Bracket resource cleanup" >> shutdownQuery conn)
-                                    (\_ -> yieldResults parser conn q)
+doQuery parser conn q fq = do
+    pid <- liftIO $ withConnection conn LibPQ.backendPID
+    bracketP (traceM ("Bracket resource setup for " ++ show pid) >> withConnection conn initQ)
+             (\_ -> traceM ("Bracket resource cleanup for " ++ show pid) >> shutdownQuery conn)
+             (\_ -> yieldResults parser conn q)
   where
     initQ c = do
       LibPQ.sendQuery c fq >>= flip unless (throwConnError c)
@@ -127,6 +133,8 @@ shutdownQuery conn = do
 
 cancelQuery :: Connection -> IO ()
 cancelQuery conn = do
+  pid <- withConnection conn LibPQ.backendPID
+  traceM ("Cleaning up " ++ show pid)
   c <- withConnection conn LibPQ.getCancel
   case c of
     Just c' -> do
