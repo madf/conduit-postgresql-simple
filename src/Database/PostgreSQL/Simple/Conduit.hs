@@ -135,15 +135,19 @@ shutdownQuery conn = do
 cancelQuery :: Connection -> IO ()
 cancelQuery conn = do
   pid <- withConnection conn LibPQ.backendPID
-  traceM ("Cleaning up " ++ show pid)
-  c <- withConnection conn LibPQ.getCancel
-  case c of
-    Just c' -> do
-      r <- LibPQ.cancel c'
-      case r of
-        Left _ -> return ()
-        Right _ -> finishQuery conn
-    Nothing -> return ()
+  status <- withConnection conn LibPQ.status
+  case status of
+    LibPQ.ConnectionBad -> traceM ("Not cleaning up " ++ show pid ++ " because the connection is bad")
+    cs -> do
+      traceM ("Cleaning up " ++ show pid ++ " with status '" ++ show cs ++ "'")
+      c <- withConnection conn LibPQ.getCancel
+      case c of
+        Just c' -> do
+          r <- LibPQ.cancel c'
+          case r of
+            Left _ -> return ()
+            Right _ -> finishQuery conn
+        Nothing -> return ()
 
 finishQuery :: Connection -> IO ()
 finishQuery conn = do
