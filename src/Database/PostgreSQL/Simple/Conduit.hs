@@ -84,9 +84,9 @@ yieldResults parser conn q = do
         LibPQ.CommandOk -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ ") resulted in a command response") q
         LibPQ.CopyOut -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): COPY TO is not supported") q
         LibPQ.CopyIn -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): COPY FROM is not supported") q
-        LibPQ.BadResponse -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
-        LibPQ.NonfatalError -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
-        LibPQ.FatalError -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
+        LibPQ.BadResponse -> liftIO $ throwResultError (C8.pack $ "query (" ++ show pid ++ ")") result status
+        LibPQ.NonfatalError -> liftIO $ throwResultError (C8.pack $ "query (" ++ show pid ++ ")") result status
+        LibPQ.FatalError -> liftIO $ throwResultError (C8.pack $ "query (" ++ show pid ++ ")") result status
         LibPQ.SingleTuple -> yieldResult parser conn result q
         LibPQ.TuplesOk -> liftIO $ finishQuery conn
         _ -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): unknown error") q
