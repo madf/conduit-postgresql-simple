@@ -59,7 +59,7 @@ doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteStri
 doQuery parser conn q fq = do
     pid <- liftIO $ withConnection conn LibPQ.backendPID
     bracketP (traceM ("Bracket resource setup for " ++ show pid) >> withConnection conn initQ)
-             (\_ -> traceM ("Bracket resource cleanup for " ++ show pid) >> shutdownQuery conn)
+             (\_ -> traceM ("Bracket resource cleanup for " ++ show pid) >> cancelQuery conn)
              (\_ -> yieldResults parser conn q)
   where
     initQ c = do
@@ -77,18 +77,19 @@ yieldResults parser conn q = do
   case mres of
     Nothing -> pure ()
     Just result -> do
+      pid <- liftIO $ withConnection conn LibPQ.backendPID
       status <- liftIO $ LibPQ.resultStatus result
       case status of
-        LibPQ.EmptyQuery -> liftIO $ throwM $ QueryError "query: Empty query" q
-        LibPQ.CommandOk -> liftIO $ throwM $ QueryError "query resulted in a command response" q
-        LibPQ.CopyOut -> liftIO $ throwM $ QueryError "query: COPY TO is not supported" q
-        LibPQ.CopyIn -> liftIO $ throwM $ QueryError "query: COPY FROM is not supported" q
-        LibPQ.BadResponse -> liftIO $ throwResultError "query" result status
-        LibPQ.NonfatalError -> liftIO $ throwResultError "query" result status
-        LibPQ.FatalError -> liftIO $ throwResultError "query" result status
+        LibPQ.EmptyQuery -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): Empty query") q
+        LibPQ.CommandOk -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ ") resulted in a command response") q
+        LibPQ.CopyOut -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): COPY TO is not supported") q
+        LibPQ.CopyIn -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): COPY FROM is not supported") q
+        LibPQ.BadResponse -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
+        LibPQ.NonfatalError -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
+        LibPQ.FatalError -> liftIO $ throwResultError ("query (" ++ show pid ++ ")") result status
         LibPQ.SingleTuple -> yieldResult parser conn result q
         LibPQ.TuplesOk -> liftIO $ finishQuery conn
-        _ -> liftIO $ throwM $ QueryError "query: unknown error" q
+        _ -> liftIO $ throwM $ QueryError ("query (" ++ show pid ++ "): unknown error") q
 
 yieldResult :: (MonadResource m) => RowParser r -> Connection -> LibPQ.Result -> Query -> ConduitT () r m ()
 yieldResult parser conn result q = do
