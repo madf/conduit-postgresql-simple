@@ -57,7 +57,7 @@ query_ conn q = do
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
 doQuery parser conn q fq = bracketP (withConnection conn initQ)
-             (\_ -> cancelQuery conn)
+             (\_ -> shutdownQuery conn)
              (\_ -> yieldResults parser conn q)
   where
     initQ c = do
@@ -129,10 +129,12 @@ getRowWith parser ncols conn result = do
 
 shutdownQuery :: Connection -> IO ()
 shutdownQuery conn = do
+  pid <- withConnection conn LibPQ.backendPID
+  traceM $ "Shutting down query at " ++ show pid
   s <- withConnection conn LibPQ.transactionStatus
   case s of
     LibPQ.TransActive -> cancelQuery conn
-    _ -> return ()
+    _ -> finishQuery conn
 
 cancelQuery :: Connection -> IO ()
 cancelQuery conn = do
