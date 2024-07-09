@@ -64,7 +64,9 @@ doQuery parser conn q fq = bracketP (withConnection conn initQ)
       pid <- LibPQ.backendPID c
       traceM $ "Initializing query at " ++ show pid
       LibPQ.sendQuery c fq >>= flip unless (throwConnError c pid)
+      traceM $ "Initializing connection at " ++ show pid ++ " to single row mode"
       LibPQ.setSingleRowMode c >>= flip unless (throwConnError c pid)
+      traceM $ "Initialization at " ++ show pid ++ " is finished"
     throwConnError c pid = do
       e <- LibPQ.errorMessage c
       case e of
