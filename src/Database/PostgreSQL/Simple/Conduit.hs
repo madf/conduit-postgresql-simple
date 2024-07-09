@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Database.PostgreSQL.Simple.Conduit
     ( query
@@ -41,7 +42,7 @@ import Debug.Trace
 --
 -- * 'SqlError':  the postgresql backend returned an error,  e.g.
 --   a syntax or type error,  or an incorrect table or column name.
-query :: (MonadResource m, ToRow qps, FromRow r) => Connection -> Query -> qps -> ConduitT () r m ()
+query :: (MonadResource m, MonadUnliftIO m, MonadThrow m, ToRow qps, FromRow r) => Connection -> Query -> qps -> ConduitT () r m ()
 query conn q ps = do
   pid <- liftIO $ withConnection conn LibPQ.backendPID
   traceM $ "query (" ++ show pid ++ ") " ++ show q
@@ -49,16 +50,17 @@ query conn q ps = do
   doQuery fromRow conn q fq
 
 -- | A version of 'query' that does not perform query substitution.
-query_ :: (MonadResource m, FromRow r) => Connection -> Query -> ConduitT () r m ()
+query_ :: (MonadResource m, MonadUnliftIO m, MonadThrow m, FromRow r) => Connection -> Query -> ConduitT () r m ()
 query_ conn q = do
     pid <- liftIO $ withConnection conn LibPQ.backendPID
     traceM ("query_ (" ++ show pid ++ ") " ++ show q)
     doQuery fromRow conn q (fromQuery q)
 
-doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
-doQuery parser conn q fq = bracketP (withConnection conn initQ)
-             (\_ -> shutdownQuery conn)
-             (\_ -> yieldResults parser conn q)
+doQuery :: (MonadResource m, MonadUnliftIO m, MonadThrow m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
+doQuery parser conn q fq = catchC (bracketP (withConnection conn initQ)
+                                            (\_ -> shutdownQuery conn)
+                                            (\_ -> yieldResults parser conn q))
+                                  (\(e :: SomeException) -> traceM ("Incoming exception: '" ++ show e ++ "'") >> throwM e)
   where
     initQ c = do
       pid <- LibPQ.backendPID c
@@ -69,6 +71,7 @@ doQuery parser conn q fq = bracketP (withConnection conn initQ)
       traceM $ "Initialization at " ++ show pid ++ " is finished"
     throwConnError c pid = do
       e <- LibPQ.errorMessage c
+      traceM $ "Throwing error: " ++ show e
       case e of
         Nothing -> throwM $ QueryError "No error" q
         Just msg -> throwM $ QueryError ("PID: (" ++ show pid ++ ") " ++ C8.unpack msg) q
