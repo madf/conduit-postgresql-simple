@@ -57,16 +57,15 @@ query_ conn q = do
 
 doQuery :: (MonadResource m) => RowParser r -> Connection -> Query -> B.ByteString -> ConduitT () r m ()
 doQuery parser conn q fq = bracketP (withConnection conn initQ)
-                                    (\_ -> cancelQuery conn)
-                                    (\_ -> yieldResults parser conn q)
+             (\_ -> cancelQuery conn)
+             (\_ -> yieldResults parser conn q)
   where
     initQ c = do
-      pid <- liftIO $ withConnection conn LibPQ.backendPID
+      pid <- LibPQ.backendPID c
       traceM $ "Initializing query at " ++ show pid
-      LibPQ.sendQuery c fq >>= flip unless (throwConnError c)
-      LibPQ.setSingleRowMode c >>= flip unless (throwConnError c)
-    throwConnError c = do
-      pid <- liftIO $ withConnection conn LibPQ.backendPID
+      LibPQ.sendQuery c fq >>= flip unless (throwConnError c pid)
+      LibPQ.setSingleRowMode c >>= flip unless (throwConnError c pid)
+    throwConnError c pid = do
       e <- LibPQ.errorMessage c
       case e of
         Nothing -> throwM $ QueryError "No error" q
@@ -145,11 +144,12 @@ cancelQuery conn = do
       c <- withConnection conn LibPQ.getCancel
       case c of
         Just c' -> do
+          traceM "Got cancel data"
           r <- LibPQ.cancel c'
           case r of
             Left _ -> return ()
             Right _ -> finishQuery conn
-        Nothing -> return ()
+        Nothing -> traceM "Got no cancel data"
 
 finishQuery :: Connection -> IO ()
 finishQuery conn = do
